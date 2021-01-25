@@ -1,24 +1,59 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::io;
-use std::num::ParseFloatError;
 use std::rc::Rc;
+use nom::IResult;
+use nom::sequence::tuple;
+use nom::bytes::complete::tag;
+use nom::branch::alt;
+use nom::multi::{separated_list0, many1};
+use nom::character::complete::{multispace1, digit1, multispace0, satisfy};
+use nom::number::complete::double;
+use nom::combinator::{recognize, opt};
+use nom::error::Error;
+use nom::error::ErrorKind;
+use nom::lib::std::cmp::Ordering;
+use nom::lib::std::fmt::{Debug, Formatter};
+
+#[cfg(test)]
+mod test;
 
 /*
   Types
 */
 
-#[derive(Clone)]
+#[derive(Clone, PartialOrd, PartialEq, Debug)]
 enum RispExp {
   Bool(bool),
   Symbol(String),
   Number(f64),
   List(Vec<RispExp>),
-  Func(fn(&[RispExp]) -> Result<RispExp, RispErr>),
+  Func(RispFunc),
   Lambda(RispLambda),
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
+struct RispFunc(fn(&[RispExp]) -> Result<RispExp, RispErr>);
+
+impl PartialEq for RispFunc {
+  fn eq(&self, _other: &Self) -> bool {
+    false
+  }
+}
+
+impl PartialOrd for RispFunc {
+  fn partial_cmp(&self, _other: &Self) -> Option<Ordering> {
+    None
+  }
+}
+
+impl Debug for RispFunc {
+  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    f.write_str("Anonymous RispFunc")
+  }
+}
+
+#[derive(Clone, PartialOrd, PartialEq, Debug)]
 struct RispLambda {
   params_exp: Rc<RispExp>,
   body_exp: Rc<RispExp>,
@@ -61,56 +96,85 @@ struct RispEnv<'a> {
   Parse
 */
 
-fn tokenize(expr: String) -> Vec<String> {
-  expr
-    .replace("(", " ( ")
-    .replace(")", " ) ")
-    .split_whitespace()
-    .map(|x| x.to_string())
-    .collect()
-}
-
-fn parse<'a>(tokens: &'a [String]) -> Result<(RispExp, &'a [String]), RispErr> {
-  let (token, rest) = tokens.split_first()
-    .ok_or(
-      RispErr::Reason("could not get token".to_string())
-    )?;
-  match &token[..] {
-    "(" => read_seq(rest),
-    ")" => Err(RispErr::Reason("unexpected `)`".to_string())),
-    _ => Ok((parse_atom(token), rest)),
+fn parse(input: &str) -> Result<Vec<RispExp>, RispErr> {
+  match file(input) {
+    Ok(((), lists)) => Ok(lists),
+    Err(nom::Err::Error(e)) => Err(e),
+    Err(nom::Err::Failure(e)) => Err(e),
+    Err(nom::Err::Incomplete(needed)) => Err(RispErr::Reason(format!("incomplete parse: {:#?}", needed))),
   }
 }
 
-fn read_seq<'a>(tokens: &'a [String]) -> Result<(RispExp, &'a [String]), RispErr> {
-  let mut res: Vec<RispExp> = vec![];
-  let mut xs = tokens;
-  loop {
-    let (next_token, rest) = xs
-      .split_first()
-      .ok_or(RispErr::Reason("could not find closing `)`".to_string()))
-      ?;
-    if next_token == ")" {
-      return Ok((RispExp::List(res), rest)) // skip `)`, head to the token after
-    }
-    let (exp, new_xs) = parse(&xs)?;
-    res.push(exp);
-    xs = new_xs;
+fn file(input: &str) -> IResult<(), Vec<RispExp>, RispErr> {
+  let mut lists = separated_list0(multispace0, list);
+
+  match lists(input) {
+    Ok(("", items)) => Ok(((), items)),
+    Ok((rest, _items)) => Err(nom::Err::Error(RispErr::Reason(format!("Unknown text at end of file: {}", rest)))),
+    Err(nom::Err::Error(e)) => Err(nom::Err::Error(RispErr::Reason(format!("parsing error: {:#?}", e.code)))),
+    Err(nom::Err::Failure(e)) => Err(nom::Err::Failure(RispErr::Reason(format!("parsing failure: {:#?}", e.code)))),
+    Err(nom::Err::Incomplete(needed)) => Err(nom::Err::Incomplete(needed)),
   }
 }
 
-fn parse_atom(token: &str) -> RispExp {
-  match token.as_ref() {
-    "true" => RispExp::Bool(true),
-    "false" => RispExp::Bool(false),
-    _ => {
-      let potential_float: Result<f64, ParseFloatError> = token.parse();
-      match potential_float {
-        Ok(v) => RispExp::Number(v),
-        Err(_) => RispExp::Symbol(token.to_string().clone())
-      }
-    }
+fn list(input: &str) -> IResult<&str, RispExp> {
+  let list_element = alt((bool, number, list, identifier));
+  let mut list = tuple((multispace0, tag("("), multispace0, opt(separated_list0(multispace1, list_element)), multispace0, tag(")"), multispace0));
+
+  let (rest, (_, _, _, items, _, _, _)) = list(input)?;
+
+  if items.is_none() {
+    return Ok((rest, RispExp::List(Vec::new())));
   }
+  Ok((rest, RispExp::List(items.unwrap())))
+}
+
+fn bool(input: &str) -> IResult<&str, RispExp> {
+  let mut truefalse = alt((tag("true"), tag("false")));
+
+  let (rest, output) = truefalse(input)?;
+
+  match output {
+    "true" => Ok((rest, RispExp::Bool(true))),
+    "false" => Ok((rest, RispExp::Bool(false))),
+    _ => unreachable!()
+  }
+}
+
+fn number(input: &str) -> IResult<&str, RispExp> {
+  alt((float_number, int_number))(input)
+}
+
+fn float_number(input: &str) -> IResult<&str, RispExp> {
+  let (rest, float) = double(input)?;
+
+  Ok((rest, RispExp::Number(float)))
+}
+
+fn int_number(input: &str) -> IResult<&str, RispExp> {
+  let mut num = recognize(tuple((
+    opt(alt((tag("+"), tag("-")))),
+    digit1)));
+  // (maybe + or -) then a number
+
+  let (rest, num) = num(input)?;
+
+  let integer: i64 = match num.parse() {
+    Ok(it) => it,
+    Err(_) => return Err(nom::Err::Error(Error::new(input, ErrorKind::Float)))
+  };
+  let float = integer as f64;
+
+  Ok((rest, RispExp::Number(float)))
+}
+
+fn identifier(input: &str) -> IResult<&str, RispExp> {
+  let mut identifier = recognize(many1(satisfy(|char| !char.is_whitespace())));
+  // at least one character of anything but whitespace
+
+  let (rest, symbol) = identifier(input)?;
+
+  return Ok((rest, RispExp::Symbol(symbol.to_string())))
 }
 
 /*
@@ -119,7 +183,7 @@ fn parse_atom(token: &str) -> RispExp {
 
 macro_rules! ensure_tonicity {
   ($check_fn:expr) => {{
-    |args: &[RispExp]| -> Result<RispExp, RispErr> {
+    RispFunc(|args: &[RispExp]| -> Result<RispExp, RispErr> {
       let floats = parse_list_of_floats(args)?;
       let first = floats.first().ok_or(RispErr::Reason("expected at least one number".to_string()))?;
       let rest = &floats[1..];
@@ -130,7 +194,7 @@ macro_rules! ensure_tonicity {
         }
       };
       Ok(RispExp::Bool(f(first, rest)))
-    }
+    })
   }};
 }
 
@@ -138,17 +202,17 @@ fn default_env<'a>() -> RispEnv<'a> {
   let mut data: HashMap<String, RispExp> = HashMap::new();
   data.insert(
     "+".to_string(), 
-    RispExp::Func(
+    RispExp::Func(RispFunc(
       |args: &[RispExp]| -> Result<RispExp, RispErr> {
         let sum = parse_list_of_floats(args)?.iter().fold(0.0, |sum, a| sum + a);
         
         Ok(RispExp::Number(sum))
       }
-    )
+    ))
   );
   data.insert(
     "-".to_string(), 
-    RispExp::Func(
+    RispExp::Func(RispFunc(
       |args: &[RispExp]| -> Result<RispExp, RispErr> {
         let floats = parse_list_of_floats(args)?;
         let first = *floats.first().ok_or(RispErr::Reason("expected at least one number".to_string()))?;
@@ -156,7 +220,7 @@ fn default_env<'a>() -> RispEnv<'a> {
         
         Ok(RispExp::Number(first - sum_of_rest))
       }
-    )
+    ))
   );
   data.insert(
     "=".to_string(), 
@@ -391,7 +455,7 @@ fn eval(exp: &RispExp, env: &mut RispEnv) -> Result<RispExp, RispErr> {
           let first_eval = eval(first_form, env)?;
           match first_eval {
             RispExp::Func(f) => {
-              f(&eval_forms(arg_forms, env)?)
+              f.0(&eval_forms(arg_forms, env)?)
             },
             RispExp::Lambda(lambda) => {
               let new_env = &mut env_for_lambda(lambda.params_exp, arg_forms, env)?;
@@ -414,10 +478,19 @@ fn eval(exp: &RispExp, env: &mut RispEnv) -> Result<RispExp, RispErr> {
 */
 
 fn parse_eval(expr: String, env: &mut RispEnv) -> Result<RispExp, RispErr> {
-  let (parsed_exp, _) = parse(&tokenize(expr))?;
-  let evaled_exp = eval(&parsed_exp, env)?;
+  let parsed_exp = parse(&expr)?;
 
-  Ok(evaled_exp)
+  if parsed_exp.is_empty() {
+    return Ok(RispExp::List(Vec::new()));
+  }
+
+  let mut evaled_exp: Option<RispExp> = None;
+
+  for code in parsed_exp {
+    evaled_exp = Some(eval(&code, env)?);
+  }
+
+  Ok(evaled_exp.unwrap())
 }
 
 fn slurp_expr() -> String {
