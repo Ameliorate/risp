@@ -130,7 +130,10 @@ fn parse_list_nested() {
 fn parse_list_multi_nested() {
     let (rest, result) = list("(() ())").unwrap();
 
-    assert_eq!(result, RispExp::List(vec![RispExp::List(Vec::new()), RispExp::List(Vec::new())]));
+    assert_eq!(
+        result,
+        RispExp::List(vec![RispExp::List(Vec::new()), RispExp::List(Vec::new())])
+    );
     assert_eq!(rest, "")
 }
 

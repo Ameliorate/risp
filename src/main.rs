@@ -234,9 +234,9 @@ fn eval_forms(arg_forms: &[RispExp], env: &mut RispEnv) -> Result<Vec<RispExp>, 
 
 fn eval(exp: &RispExp, env: &mut RispEnv) -> Result<RispExp, RispErr> {
     match exp {
-        RispExp::Symbol(k) => {
-            env.get(k).ok_or(RispErr::Reason(format!("unexpected symbol k='{}'", k)))
-        }
+        RispExp::Symbol(k) => env
+            .get(k)
+            .ok_or(RispErr::Reason(format!("unexpected symbol k='{}'", k))),
         RispExp::Bool(_a) => Ok(exp.clone()),
         RispExp::Number(_a) => Ok(exp.clone()),
 
