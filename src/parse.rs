@@ -1,7 +1,7 @@
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{line_ending, multispace0, multispace1, not_line_ending, satisfy};
-use nom::combinator::{map, peek, recognize};
+use nom::combinator::{map, peek, recognize, eof};
 use nom::error::{context, convert_error, VerboseError};
 use nom::multi::{many0, many1, separated_list0};
 use nom::number::complete::double;
@@ -98,7 +98,7 @@ pub fn comment(input: &str) -> IResult<&str, Option<RispExp>, VerboseError<&str>
     let mut comment = context(
         "comment",
         map(
-            tuple((tag(";"), not_line_ending, peek(line_ending))),
+            tuple((tag(";"), not_line_ending, peek(alt((line_ending, eof))))),
             |_| Option::None,
         ),
     );
