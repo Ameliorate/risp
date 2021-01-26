@@ -188,3 +188,19 @@ fn parse_comment_in_list() -> Result<(), nom::Err<VerboseError<&'static str>>> {
     );
     Ok(())
 }
+
+#[test]
+fn parse_file_comment() -> Result<(), nom::Err<RispErr>> {
+    let ((), result) = file("; This is a comment\n")?;
+
+    assert_eq!(result, Vec::new());
+    Ok(())
+}
+
+#[test]
+fn parse_file_list_comment() -> Result<(), nom::Err<RispErr>> {
+    let ((), result) = file("(list); This is a comment\n")?;
+
+    assert_eq!(result, vec![RispExp::List(vec![RispExp::Symbol("list".to_string())])]);
+    Ok(())
+}
