@@ -73,7 +73,14 @@ fn parse_list_numbers() {
     let (rest, result) = list("(12 13.2 100)").unwrap();
 
     assert_eq!(rest, "");
-    assert_eq!(result, RispExp::List(vec![RispExp::Number(12.0), RispExp::Number(13.2), RispExp::Number(100.0)]));
+    assert_eq!(
+        result,
+        RispExp::List(vec![
+            RispExp::Number(12.0),
+            RispExp::Number(13.2),
+            RispExp::Number(100.0)
+        ])
+    );
 }
 
 #[test]
@@ -105,14 +112,37 @@ fn parse_list_nested() {
     let (rest, result) = list("(test a (plus 1 2))").unwrap();
 
     assert_eq!(rest, "");
-    assert_eq!(result, RispExp::List(vec![RispExp::Symbol("test".to_string()), RispExp::Symbol("a".to_string()),
-                                          RispExp::List(vec![RispExp::Symbol("plus".to_string()), RispExp::Number(1.0), RispExp::Number(2.0)])]));
+    assert_eq!(
+        result,
+        RispExp::List(vec![
+            RispExp::Symbol("test".to_string()),
+            RispExp::Symbol("a".to_string()),
+            RispExp::List(vec![
+                RispExp::Symbol("plus".to_string()),
+                RispExp::Number(1.0),
+                RispExp::Number(2.0)
+            ])
+        ])
+    );
+}
+
+#[test]
+fn parse_list_multi_nested() {
+    let (rest, result) = list("(() ())").unwrap();
+
+    assert_eq!(result, RispExp::List(vec![RispExp::List(Vec::new()), RispExp::List(Vec::new())]));
+    assert_eq!(rest, "")
 }
 
 #[test]
 fn parse_file() {
     let ((), result) = file("(test)\n(test2)").unwrap();
 
-    assert_eq!(result, vec![RispExp::List(vec![RispExp::Symbol("test".to_string())]),
-                            RispExp::List(vec![RispExp::Symbol("test2".to_string())])])
+    assert_eq!(
+        result,
+        vec![
+            RispExp::List(vec![RispExp::Symbol("test".to_string())]),
+            RispExp::List(vec![RispExp::Symbol("test2".to_string())])
+        ]
+    )
 }
