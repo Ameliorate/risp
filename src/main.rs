@@ -6,7 +6,7 @@ use nom::IResult;
 use nom::sequence::tuple;
 use nom::bytes::complete::tag;
 use nom::branch::alt;
-use nom::multi::{separated_list0, many1};
+use nom::multi::{separated_list0, many1, many0};
 use nom::character::complete::{multispace1, digit1, multispace0, satisfy};
 use nom::number::complete::double;
 use nom::combinator::{recognize, opt};
@@ -106,10 +106,10 @@ fn parse(input: &str) -> Result<Vec<RispExp>, RispErr> {
 }
 
 fn file(input: &str) -> IResult<(), Vec<RispExp>, RispErr> {
-  let mut lists = separated_list0(multispace0, list);
+  let mut lists = many0(tuple((multispace0, list, multispace0)));
 
   match lists(input) {
-    Ok(("", items)) => Ok(((), items)),
+    Ok(("", items)) => Ok(((), items.iter().map(|(_, item, _)| item.clone()).collect())),
     Ok((rest, _items)) => Err(nom::Err::Error(RispErr::Reason(format!("Unknown text at end of file: {}", rest)))),
     Err(nom::Err::Error(e)) => Err(nom::Err::Error(RispErr::Reason(format!("parsing error: {:#?}", e.code)))),
     Err(nom::Err::Failure(e)) => Err(nom::Err::Failure(RispErr::Reason(format!("parsing failure: {:#?}", e.code)))),
@@ -169,8 +169,8 @@ fn int_number(input: &str) -> IResult<&str, RispExp> {
 }
 
 fn identifier(input: &str) -> IResult<&str, RispExp> {
-  let mut identifier = recognize(many1(satisfy(|char| !char.is_whitespace())));
-  // at least one character of anything but whitespace
+  let mut identifier = recognize(many1(satisfy(|char| !char.is_whitespace() && char != '(' && char != ')')));
+  // at least one character of anything but whitespace and parens
 
   let (rest, symbol) = identifier(input)?;
 

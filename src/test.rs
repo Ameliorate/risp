@@ -96,7 +96,7 @@ fn parse_list_empty_newline() {
 fn parse_list_spaces_after() {
     let (rest, result) = list("() ").unwrap();
 
-    assert_eq!(rest, " ");
+    assert_eq!(rest, "");
     assert_eq!(result, RispExp::List(Vec::new()));
 }
 
