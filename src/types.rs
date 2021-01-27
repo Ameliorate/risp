@@ -66,4 +66,3 @@ pub struct RispLambda {
 pub enum RispErr {
     Reason(String),
 }
-

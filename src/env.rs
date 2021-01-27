@@ -1,23 +1,26 @@
+use crate::{RispErr, RispExp, RispFunc, RispLambda};
 use std::collections::HashMap;
-use crate::{RispExp, RispFunc, RispErr, RispLambda};
 use std::rc::Rc;
 
 macro_rules! ensure_tonicity {
     ($check_fn:expr) => {{
-        RispFunc { function: |args: &[RispExp], _: &mut RispEnv| -> Result<RispExp, RispErr> {
-            let floats = parse_list_of_floats(args)?;
-            let first = floats
-                .first()
-                .ok_or(RispErr::Reason("expected at least one number".to_string()))?;
-            let rest = &floats[1..];
-            fn f(prev: &f64, xs: &[f64]) -> bool {
-                match xs.first() {
-                    Some(x) => $check_fn(prev, x) && f(x, &xs[1..]),
-                    None => true,
-                }
-            };
-            Ok(RispExp::Bool(f(first, rest)))
-        }, is_macro: false }
+        RispFunc {
+            function: |args: &[RispExp], _: &mut RispEnv| -> Result<RispExp, RispErr> {
+                let floats = parse_list_of_floats(args)?;
+                let first = floats
+                    .first()
+                    .ok_or(RispErr::Reason("expected at least one number".to_string()))?;
+                let rest = &floats[1..];
+                fn f(prev: &f64, xs: &[f64]) -> bool {
+                    match xs.first() {
+                        Some(x) => $check_fn(prev, x) && f(x, &xs[1..]),
+                        None => true,
+                    }
+                };
+                Ok(RispExp::Bool(f(first, rest)))
+            },
+            is_macro: false,
+        }
     }};
 }
 
@@ -40,7 +43,7 @@ impl<'a> RispEnv<'a> {
 
                     Ok(RispExp::Number(sum))
                 },
-                is_macro: false
+                is_macro: false,
             }),
         );
         data.insert(
@@ -55,7 +58,7 @@ impl<'a> RispEnv<'a> {
 
                     Ok(RispExp::Number(first - sum_of_rest))
                 },
-                is_macro: false
+                is_macro: false,
             }),
         );
         data.insert(
@@ -80,15 +83,24 @@ impl<'a> RispEnv<'a> {
         );
         data.insert(
             "if".to_string(),
-            RispExp::Func(RispFunc { function: if_function, is_macro: false }),
+            RispExp::Func(RispFunc {
+                function: if_function,
+                is_macro: false,
+            }),
         );
         data.insert(
             "def".to_string(),
-            RispExp::Func(RispFunc { function: def_function, is_macro: true }),
+            RispExp::Func(RispFunc {
+                function: def_function,
+                is_macro: true,
+            }),
         );
         data.insert(
             "fn".to_string(),
-            RispExp::Func(RispFunc { function: lambda_function, is_macro: true })
+            RispExp::Func(RispFunc {
+                function: lambda_function,
+                is_macro: true,
+            }),
         );
 
         RispEnv { data, outer: None }
@@ -119,11 +131,13 @@ impl<'a> RispEnv<'a> {
                 let arg_forms = &list[1..];
                 let first_eval = self.eval(first_form)?;
                 match first_eval {
-                    RispExp::Func(f) => if f.is_macro {
-                        (f.function)(arg_forms, self)
-                    } else {
-                        (f.function)(&self.eval_forms(arg_forms)?, self)
-                    },
+                    RispExp::Func(f) => {
+                        if f.is_macro {
+                            (f.function)(arg_forms, self)
+                        } else {
+                            (f.function)(&self.eval_forms(arg_forms)?, self)
+                        }
+                    }
                     RispExp::Lambda(lambda) => {
                         let mut new_env = env_for_lambda(lambda.params_exp, arg_forms, self)?;
                         new_env.eval(&lambda.body_exp)
