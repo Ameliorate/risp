@@ -33,7 +33,10 @@ impl fmt::Display for RispExp {
 }
 
 #[derive(Copy, Clone)]
-pub struct RispFunc(pub fn(&[RispExp]) -> Result<RispExp, RispErr>);
+pub struct RispFunc {
+    pub function: fn(&[RispExp], &mut RispEnv) -> Result<RispExp, RispErr>,
+    pub is_macro: bool,
+}
 
 impl PartialEq for RispFunc {
     fn eq(&self, _other: &Self) -> bool {
@@ -64,20 +67,3 @@ pub enum RispErr {
     Reason(String),
 }
 
-#[derive(Clone)]
-pub struct RispEnv<'a> {
-    pub data: HashMap<String, RispExp>,
-    pub outer: Option<&'a RispEnv<'a>>,
-}
-
-impl<'a> RispEnv<'a> {
-    pub fn get(&self, key: &str) -> Option<RispExp> {
-        match self.data.get(key) {
-            Some(exp) => Some(exp.clone()),
-            None => match self.outer {
-                Some(outer_env) => outer_env.get(key),
-                None => None,
-            },
-        }
-    }
-}
