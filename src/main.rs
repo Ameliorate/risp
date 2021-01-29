@@ -13,7 +13,7 @@ mod parse;
 pub mod env;
 pub use env::*;
 
-fn parse(input: &str) -> Result<Vec<RispExp>, RispErr> {
+pub fn parse(input: &str) -> Result<Vec<RispExp>, RispErr> {
     match file(input) {
         Ok(((), lists)) => Ok(lists),
         Err(nom::Err::Error(e)) => Err(e),
@@ -27,22 +27,6 @@ fn parse(input: &str) -> Result<Vec<RispExp>, RispErr> {
 /*
   Repl
 */
-
-fn parse_eval(expr: String, env: &mut RispEnv) -> Result<RispExp, RispErr> {
-    let parsed_exp = parse(&expr)?;
-
-    if parsed_exp.is_empty() {
-        return Ok(RispExp::List(Vec::new()));
-    }
-
-    let mut evaled_exp: Option<RispExp> = None;
-
-    for code in parsed_exp {
-        evaled_exp = Some(env.eval(&code)?);
-    }
-
-    Ok(evaled_exp.unwrap())
-}
 
 fn slurp_expr() -> String {
     let mut expr = String::new();
@@ -59,7 +43,7 @@ fn main() {
     loop {
         println!("risp >");
         let expr = slurp_expr();
-        match parse_eval(expr, env) {
+        match env.parse_eval(expr) {
             Ok(res) => println!("// 🔥 => {}", res),
             Err(e) => match e {
                 RispErr::Reason(msg) => println!("// 🙀 => {}", msg),

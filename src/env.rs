@@ -1,4 +1,4 @@
-use crate::{RispErr, RispExp, RispFunc, RispLambda};
+use crate::{RispErr, RispExp, RispFunc, RispLambda, parse};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -149,6 +149,22 @@ impl<'a> RispEnv<'a> {
             RispExp::Func(_) => Err(RispErr::Reason("unexpected form".to_string())),
             RispExp::Lambda(_) => Err(RispErr::Reason("unexpected form".to_string())),
         }
+    }
+
+    pub fn parse_eval(&mut self, expr: String) -> Result<RispExp, RispErr> {
+        let parsed_exp = parse(&expr)?;
+
+        if parsed_exp.is_empty() {
+            return Ok(RispExp::List(Vec::new()));
+        }
+
+        let mut evaled_exp: Option<RispExp> = None;
+
+        for code in parsed_exp {
+            evaled_exp = Some(self.eval(&code)?);
+        }
+
+        Ok(evaled_exp.unwrap())
     }
 
     /// Replaces symbols with their values as variables, and evaluates nested lists
