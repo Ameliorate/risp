@@ -1,5 +1,5 @@
 use nom::branch::alt;
-use nom::bytes::complete::tag;
+use nom::bytes::complete::{tag, is_not};
 use nom::character::complete::{line_ending, multispace0, multispace1, not_line_ending, satisfy};
 use nom::combinator::{eof, map, peek, recognize};
 use nom::error::{context, convert_error, VerboseError};
@@ -39,7 +39,7 @@ pub fn file(input: &str) -> IResult<(), Vec<RispExp>, RispErr> {
 }
 
 pub fn exp(input: &str) -> IResult<&str, Option<RispExp>, VerboseError<&str>> {
-    context("exp", alt((comment, bool, number, list, identifier)))(input)
+    context("exp", alt((comment, bool, number, string, list, identifier)))(input)
 }
 
 pub fn list(input: &str) -> IResult<&str, Option<RispExp>, VerboseError<&str>> {
@@ -101,6 +101,16 @@ pub fn comment(input: &str) -> IResult<&str, Option<RispExp>, VerboseError<&str>
     );
 
     comment(input)
+}
+
+pub fn string(input: &str) -> IResult<&str, Option<RispExp>, VerboseError<&str>> {
+    let double_string = tuple((tag("\""), is_not("\""), tag("\"")));
+    let single_string = tuple((tag("\'"), is_not("\'"), tag("\'")));
+
+    let mut string = context("string", map(alt((double_string, single_string)),
+                                           |(_, contents, _): (&str, &str, &str)| Some(RispExp::String(contents.to_string()))));
+
+    string(input)
 }
 
 #[cfg(test)]
@@ -317,6 +327,24 @@ mod test {
 
         assert_eq!(rest, "");
         assert_eq!(result, None);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_single_string() -> Result<(), nom::Err<VerboseError<&'static str>>> {
+        let (rest, result) = string("'This is \"a\" test'")?;
+
+        assert_eq!(rest, "");
+        assert_eq!(result, Some(RispExp::String("This is \"a\" test".to_string())));
+        Ok(())
+    }
+
+    #[test]
+    fn parse_double_string() -> Result<(), nom::Err<VerboseError<&'static str>>> {
+        let (rest, result) = string("\"This is 'a' test\"")?;
+
+        assert_eq!(rest, "");
+        assert_eq!(result, Some(RispExp::String("This is 'a' test".to_string())));
         Ok(())
     }
 }

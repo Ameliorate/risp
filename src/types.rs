@@ -9,6 +9,7 @@ pub enum RispExp {
     Bool(bool),
     Symbol(String),
     Number(f64),
+    String(String),
     List(Vec<RispExp>),
     Func(RispFunc),
     Lambda(RispLambda),
@@ -19,6 +20,7 @@ impl fmt::Display for RispExp {
         let str = match self {
             RispExp::Bool(a) => a.to_string(),
             RispExp::Symbol(s) => s.clone(),
+            RispExp::String(s) => format!("\"{}\"", s),
             RispExp::Number(n) => n.to_string(),
             RispExp::List(list) => {
                 let xs: Vec<String> = list.iter().map(|x| x.to_string()).collect();

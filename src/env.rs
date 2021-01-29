@@ -123,6 +123,7 @@ impl<'a> RispEnv<'a> {
                 .ok_or(RispErr::Reason(format!("unexpected symbol k='{}'", k))),
             RispExp::Bool(_a) => Ok(exp.clone()),
             RispExp::Number(_a) => Ok(exp.clone()),
+            RispExp::String(_a) => Ok(exp.clone()),
 
             RispExp::List(list) => {
                 let first_form = list
