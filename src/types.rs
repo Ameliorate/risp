@@ -3,6 +3,7 @@ use nom::lib::std::fmt;
 use nom::lib::std::fmt::Debug;
 
 use super::*;
+use std::fmt::Display;
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub enum RispExp {
@@ -26,18 +27,20 @@ impl fmt::Display for RispExp {
                 let xs: Vec<String> = list.iter().map(|x| x.to_string()).collect();
                 format!("({})", xs.join(","))
             }
-            RispExp::Func(_) => "Function {}".to_string(),
-            RispExp::Lambda(_) => "Lambda {}".to_string(),
+            RispExp::Func(f) => format!("{}", f),
+            RispExp::Lambda(l) => format!("{}", l),
         };
 
         write!(f, "{}", str)
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct RispFunc {
     pub function: fn(&[RispExp], &mut RispEnv) -> Result<RispExp, RispErr>,
     pub is_macro: bool,
+    pub name: String,
+    pub module: String,
 }
 
 impl PartialEq for RispFunc {
@@ -54,7 +57,23 @@ impl PartialOrd for RispFunc {
 
 impl Debug for RispFunc {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str("Anonymous RispFunc")
+        f.debug_struct("RispFunc")
+            .field("name", &self.name)
+            .field("module", &self.module)
+            .field("is_macro", &self.is_macro)
+            .field("function", &"rust function")
+            .finish()
+    }
+}
+
+impl Display for RispFunc {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("Native Function {}::{}", self.module, self.name))?;
+        if self.is_macro {
+            f.write_str(" (macro)")?;
+        }
+
+        Ok(())
     }
 }
 
@@ -62,6 +81,17 @@ impl Debug for RispFunc {
 pub struct RispLambda {
     pub params_exp: Rc<RispExp>,
     pub body_exp: Rc<RispExp>,
+    pub name: Option<String>,
+}
+
+impl Display for RispLambda {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.name.is_none() {
+            f.write_str("Lambda ()")
+        } else {
+            f.write_fmt(format_args!("Lambda ({})", self.name.clone().unwrap()))
+        }
+    }
 }
 
 #[derive(Debug)]
